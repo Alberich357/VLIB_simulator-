@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Simulador VLBI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Concepto: banco de laboratorio. Controles a la izquierda, imágenes del agujero negro y lectura a la derecha, análisis de señales abajo. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --fg: #141a22;
+  --muted: #566170;
+  --grid: #e4e8ed;
+  --line: #d5dbe2;
+  --l1: #1f6fb2;
+  --l2: #d4690f;
+  --ref: #c43a2f;
+  --acc: #0c7a84;
+  --acc-fg: #ffffff;
+  --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1217; --panel: #161b22; --fg: #e5e9ee; --muted: #9aa5b3; --grid: #252c36; --line: #2a323d;
+    --l1: #5aa9e6; --l2: #f0a05a; --ref: #ff7a6b; --acc: #3cc0c9; --acc-fg: #06181a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1217; --panel: #161b22; --fg: #e5e9ee; --muted: #9aa5b3; --grid: #252c36; --line: #2a323d;
+  --l1: #5aa9e6; --l2: #f0a05a; --ref: #ff7a6b; --acc: #3cc0c9; --acc-fg: #06181a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1220px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1 { font-family: var(--font-head); font-weight: 700; font-size: clamp(26px, 4vw, 34px); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-family: var(--font-head); font-weight: 500; font-size: 15px; margin: 0; }
+p { margin: 0; }
+.intro { color: var(--muted); max-width: 76ch; margin-top: 6px; }
+.badge { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.top { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }
+.right-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; align-content: start; }
+.controls .group {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.controls .group:first-child { margin-top: 0; }
+.controls .group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.controls .group-sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.ctl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 500; }
+.ctl-sub { font-size: 11.5px; color: var(--muted); line-height: 1.35; margin-bottom: 2px; }
+.ctl output { font-family: var(--font-mono); font-size: 12px; color: var(--acc); font-variant-numeric: tabular-nums; white-space: nowrap; }
+input[type=range] { width: 100%; accent-color: var(--acc); margin: 2px 0; }
+.stations { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 2px; }
+.stations-head { width: 100%; display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; }
+.stations label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
+.stations input { accent-color: var(--acc); }
+.actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+button { font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+button:hover { border-color: var(--acc); }
+button.primary { background: var(--acc); color: var(--acc-fg); border-color: var(--acc); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.status { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-height: 18px; }
+.readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; align-content: start; }
+.readout .head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 4px; border-bottom: 1px solid var(--line); margin-top: 2px; }
+.kv { display: flex; flex-direction: column; min-width: 0; }
+.kv span { font-size: 11.5px; color: var(--muted); }
+.kv b { font-family: var(--font-mono); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.kv b.ok { color: var(--acc); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { display: flex; flex-direction: column; gap: 8px; }
+.panel .cap { color: var(--muted); font-size: 12.5px; max-width: 75ch; }
+.panel .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+canvas.cv { width: 100%; height: 200px; display: block; }
+canvas.cv.short { height: 120px; }
+canvas.cv.tall { height: 300px; }
+.heats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.heats figure { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.heats figcaption { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+canvas.hm { width: 100%; height: 205px; display: block; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.check input { accent-color: var(--acc); }
+.note { font-size: 12px; color: var(--muted); max-width: 90ch; }
+@media (max-width: 980px) {
+  .top { grid-template-columns: minmax(0, 1fr); }
+  canvas.hm { height: 230px; }
+}
+@media (max-width: 860px) {
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .heats { grid-template-columns: minmax(0, 1fr); }
+  canvas.hm { height: 260px; }
+}
+@media (max-width: 480px) { .controls, .readout { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">Análisis de señales · interferometría</div>
+    <h1>Simulador VLBI</h1>
+    <p class="intro">Dos antenas reciben la misma señal aleatoria, con retardo, distinta ganancia y mucho ruido. Mueve los controles y observa en tiempo real qué se recupera al correlacionarlas, cómo la fase mide el retardo y cómo cambia la imagen del anillo al modificar las estaciones o los parámetros del cielo. Todos los valores son supuestos ilustrativos, no datos del EHT.</p>
+  </header>
+
+  <section class="top">
+    <div class="card controls" id="controls" aria-label="Controles de la simulación"></div>
+
+    <div class="right-col">
+      <div class="card panel">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+          <h2>Reconstrucción de la imagen (del anillo a la imagen sucia)</h2>
+          <span class="badge">respuesta en vivo</span>
+        </div>
+        <div class="heats">
+          <figure>
+            <canvas class="hm" id="cv-model" role="img" aria-label="Modelo del anillo"></canvas>
+            <figcaption><strong>Modelo del cielo:</strong> anillo real supuesto de la fuente.</figcaption>
+          </figure>
+          <figure>
+            <canvas class="hm" id="cv-beam" role="img" aria-label="Haz sucio"></canvas>
+            <figcaption><strong>Haz sucio:</strong> respuesta de los radiotelescopios a un punto.</figcaption>
+          </figure>
+          <figure>
+            <canvas class="hm" id="cv-dirty" role="img" aria-label="Imagen sucia"></canvas>
+            <figcaption><strong>Imagen sucia:</strong> lo que reconstruye el interferómetro (círculo: anillo real).</figcaption>
+          </figure>
+        </div>
+        <p class="cap">La imagen sucia es el modelo convolucionado con el haz sucio. Al mover el diámetro, la asimetría, la declinación o activar/desactivar estaciones, verás inmediatamente cómo se deforma o aclara la imagen.</p>
+      </div>
+
+      <div class="card readout" id="readout" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card panel">
+      <h2>1. Señales en las dos estaciones</h2>
+      <div class="legend"><span><i class="sw" style="background:var(--l1)"></i>Estación 1</span><span><i class="sw" style="background:var(--l2)"></i>Estación 2 (retardada y escalada)</span></div>
+      <canvas class="cv short" id="cv-clean" role="img" aria-label="Señal de la fuente sin ruido en ambas estaciones"></canvas>
+      <canvas class="cv short" id="cv-noisy" role="img" aria-label="Muestras con ruido en ambas estaciones"></canvas>
+      <p class="cap">Arriba, la señal sin ruido: la naranja repite a la azul más tarde y más débil. Abajo, lo que miden realmente. Con ruido alto no se distingue nada a simple vista.</p>
+    </div>
+    <div class="card panel">
+      <h2>2. Correlación cruzada</h2>
+      <div class="legend"><span><i class="sw" style="background:var(--l1)"></i>Con las N muestras</span><span><i class="sw" style="background:var(--muted)"></i>Solo 256 muestras</span><span><i class="sw" style="background:var(--ref)"></i>Retardo real τ + ε</span>
+        <label class="check"><input type="checkbox" id="show256" checked> mostrar 256 muestras</label></div>
+      <canvas class="cv tall" id="cv-corr" role="img" aria-label="Correlación cruzada en función del retardo de prueba"></canvas>
+      <p class="cap">El pico aparece en el retardo real aunque cada antena tenga más ruido que señal. Con pocas muestras el ruido lo tapa. Un error de reloj ε desplaza el pico.</p>
+    </div>
+    <div class="card panel">
+      <h2>3. Fase del espectro cruzado</h2>
+      <div class="legend"><span><i class="sw" style="background:var(--l1)"></i>Fase medida</span><span><i class="sw" style="background:var(--ref)"></i>Ajuste lineal</span></div>
+      <canvas class="cv tall" id="cv-phase" role="img" aria-label="Fase residual del espectro cruzado y su ajuste lineal"></canvas>
+      <p class="cap">Se quita el retardo grueso (muestra entera del pico) y la fase restante baja en línea recta con la frecuencia. Su pendiente da el retardo con precisión menor que una muestra.</p>
+    </div>
+    <div class="card panel">
+      <h2>4. Cobertura uv (24 h)</h2>
+      <canvas class="cv" id="cv-uv" role="img" aria-label="Cobertura del plano uv"></canvas>
+      <p class="cap">Cada arco es una pareja de estaciones mientras la Tierra gira. Apaga estaciones y mira cómo se vacía el plano. Eje en gigalongitudes de onda (Gλ), con los puntos conjugados.</p>
+    </div>
+  </section>
+
+  <section class="card panel">
+    <h2>5. Visibilidades del anillo</h2>
+    <div class="legend"><span><i class="sw" style="background:var(--l1)"></i>Muestras con ruido</span><span><i class="sw" style="background:var(--ref)"></i>Anillo simétrico (referencia)</span></div>
+    <canvas class="cv tall" id="cv-vis" role="img" aria-label="Amplitud de visibilidad frente a la longitud de la línea de base"></canvas>
+    <p class="cap">La amplitud cae, llega a un mínimo y vuelve a subir. La posición del primer mínimo depende del diámetro del anillo: cámbialo con el control y el mínimo se mueve.</p>
+  </section>
+
+  <p class="note">Equivale a vlbi_simulacion.py: mismo modelo de señales (banda base escalada a 1 kHz, ancho de banda 200 Hz), mismas ecuaciones de las secciones 5.3 a 5.5 del trabajo y coordenadas aproximadas de sitios del EHT. Las realizaciones de ruido son distintas, por lo que los números varían ligeramente; la cobertura uv es idéntica.</p>
+</div>
+
+<script src="vlbi_interactivo.js" defer></script>
+</body>
+</html>
